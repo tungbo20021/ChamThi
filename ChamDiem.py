@@ -4,27 +4,31 @@ import numpy as np
 import cv2
 import math
 import os
+import pandas as pd
+from datetime import datetime
 
+# Định nghĩa các biến toàn cục
 key_map_21 = ["Đ", "S", "Đ", "S"]
 key_map_22 = ["A", "B", "C", "D"]
 
-url_image_folderp3 = "D:/BKHN/20242/AI/ChamThi/output"
-url_image_folderp2 = "D:/BKHN/20242/AI/ChamThi/Part2"
-url_image_folderp1 = "D:/BKHN/20242/AI/ChamThi/Part1"
-image_file3 = [f for f in os.listdir(url_image_folderp3) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-image_file1 = [f for f in os.listdir(url_image_folderp1) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+# Đường dẫn thư mục
+BASE_DIR = "D:/BKHN/20242/AI/ChamThi"
+DATA_RAW_DIR = os.path.join(BASE_DIR, "Data_raw")
+MODELS_DIR = os.path.join(BASE_DIR, "runs/detect")
+OUTPUT_DIR = os.path.join(BASE_DIR, "Results")
+TEMP_DIR = os.path.join(BASE_DIR, "Temp")
 
-urlSourceImage = 'D:/BKHN/20242/AI/ChamThi/test4.jpg'
-urlOutputGrayImage = 'D:/BKHN/20242/AI/ChamThi/test1gray.jpg'
-urlimage = 'D:/BKHN/20242/AI/ChamThi/result_warped.jpg'
-urlfolder = 'D:/BKHN/20242/AI/ChamThi/Imagecrop'
-urlimagep3 = urlfolder + '/cropped_image_3.jpg'
+# Tạo các thư mục nếu chưa tồn tại
+for dir_path in [OUTPUT_DIR, TEMP_DIR]:
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
 
-detect_square_model = YOLO('D:/BKHN/20242/AI/ChamThi/runs/detect/train/weights/best.pt')
-detect_rect_model = YOLO('D:/BKHN/20242/AI/ChamThi/runs/detect/train3/weights/best.pt')
-detect_circle_model = YOLO('D:/BKHN/20242/AI/ChamThi/runs/detect/train4/weights/best.pt')
-detect_circle_model_update = YOLO('D:/BKHN/20242/AI/ChamThi/runs/detect/train5/weights/best.pt')
-detect_circle_model_update1 = YOLO('D:/BKHN/20242/AI/ChamThi/runs/detect/train6/weights/best.pt')
+# Load các model YOLO
+detect_square_model = YOLO(os.path.join(MODELS_DIR, 'trainv2/weights/best.pt'))
+detect_rect_model = YOLO(os.path.join(MODELS_DIR, 'train3v2/weights/best.pt'))
+detect_circle_model = YOLO(os.path.join(MODELS_DIR, 'train4/weights/best.pt'))
+detect_circle_model_update = YOLO(os.path.join(MODELS_DIR, 'train5/weights/best.pt'))
+detect_circle_model_update1 = YOLO(os.path.join(MODELS_DIR, 'train6/weights/best.pt'))
 
 # **************************************************************************************************
 # ********************************* FUNC BONUS *****************************************************
@@ -77,8 +81,7 @@ def Tranformer(image_path, model, savefolder):
     }
     for r in result:
         for box in r.boxes:
-            # Chuyển tensor về CPU và lấy giá trị float
-            x1, y1, x2, y2 = [v.item() for v in box.xyxy[0].cpu()]
+            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
             confidence = box.conf[0].item()
             box_center = ((x1 + x2) / 2, (y1 + y2) / 2)
             for corner, coord in corner_coords.items():
@@ -89,8 +92,7 @@ def Tranformer(image_path, model, savefolder):
     center_points = {}
     for corner, box in corners.items():
         if box is not None:
-            # Chuyển tensor về CPU và lấy giá trị float
-            x1, y1, x2, y2 = [v.item() for v in box.xyxy[0].cpu()]
+            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
             center_x = (x1 + x2) / 2
             center_y = (y1 + y2) / 2
             center_points[corner] = (center_x, center_y)
@@ -143,10 +145,10 @@ def Crop1(urlimage, url):
 
 def Crop2(urlimage, url):
     img = Image.open(urlimage)
-    crop_box_0 = (0, 0, 500, 600)
-    crop_box_1 = (500, 0, 955, 600)
-    crop_box_2 = (955, 0, 1405, 600)
-    crop_box_3 = (1405, 0, 1920, 600)
+    crop_box_0 = (0, 0, 500, 380)
+    crop_box_1 = (500, 0, 955, 380)
+    crop_box_2 = (955, 0, 1405, 380)
+    crop_box_3 = (1405, 0, 1920, 380)
 
     # Crop the image
     img_cropped_0 = img.crop(crop_box_0)
@@ -155,10 +157,10 @@ def Crop2(urlimage, url):
     img_cropped_3 = img.crop(crop_box_3)
 
     # Save the cropped image
-    img_cropped_0.save(url + 'cropped_image_0.jpg')
-    img_cropped_1.save(url + 'cropped_image_1.jpg')
-    img_cropped_2.save(url + 'cropped_image_2.jpg')
-    img_cropped_3.save(url + 'cropped_image_3.jpg')
+    img_cropped_0.save(url + '/cropped_image_0.jpg')
+    img_cropped_1.save(url + '/cropped_image_1.jpg')
+    img_cropped_2.save(url + '/cropped_image_2.jpg')
+    img_cropped_3.save(url + '/cropped_image_3.jpg')
 
 def Crop(urlimage, urlfolder):
     img = Image.open(urlimage)
@@ -199,7 +201,7 @@ def subdiv_part3(image_path, model, output_dir):
         sorted_boxes = sorted(combined_boxes, key=lambda x: x[0])
 
         # Lọc các hộp có độ tin cậy dưới 0.95
-        filtered_boxes = [box for box in sorted_boxes if box[4] >= 0.95]
+        filtered_boxes = [box for box in sorted_boxes if box[4] >= 0.9][:6]
 
         # Lấy kích thước của ảnh gốc từ thuộc tính "orig_shape"
         image_size = (result.orig_shape[1], result.orig_shape[0])
@@ -297,7 +299,7 @@ def checking_part3(image_path, model):
         for center, confidence, class_id, box in zip(centers, confidences, class_ids, boxes):
             if class_id == 1:
                 combined.append((tuple(center), confidence, class_id, box))
-            elif class_id == 0 and confidence >= 0.98:
+            elif class_id == 0 and confidence >= 0.9:
                 choice.append((tuple(center), confidence, class_id, box))
     # Sắp xếp danh sách theo độ tin cậy giảm dần
     combined_sorted = sorted(combined, key=lambda x: x[1], reverse=True)
@@ -439,32 +441,10 @@ def checking_part2(img, model):
         for center, confidence, class_id, box in zip(centers, confidences, class_ids, boxes):
             if class_id == 1:
                 combined.append((tuple(center), confidence, class_id, box))
-            elif class_id == 0:
+            elif class_id == 0 and confidence >= 0.9:
                 combined_choice.append((tuple(center), confidence, class_id, box))
     # Sắp xếp danh sách theo độ tin cậy giảm dần
     combined_sorted = sorted(combined, key=lambda x: x[1], reverse=True)
-
-    # smallest_area = float('inf')
-
-    # # Duyệt qua tất cả các phần tử trong combined_sorted
-    # for boxmin in combined_sorted:
-    #     # Tính diện tích của hộp hiện tại
-    #     box_area = calculate_area(boxmin[3][2], boxmin[3][3])
-        
-    #     # So sánh với diện tích nhỏ nhất hiện tại
-    #     if box_area < smallest_area:
-    #         smallest_area = box_area
-    # highest_conf_box_area = smallest_area
-
-    # # Lọc các bound box dựa trên sự chênh lệch diện tích
-    # filtered_combined = []
-    # removed_count = 0
-    # for box in combined_sorted:
-    #     area = calculate_area(box[3][2], box[3][3])
-    #     if abs(area - highest_conf_box_area) > 10000:
-    #         removed_count += 1
-    #     else:
-    #         filtered_combined.append(box)
 
     # Lưu trữ vào danh sách circle
     choice.extend(filter_boxes_by_area(combined_choice))
@@ -490,16 +470,41 @@ def checking_part2(img, model):
 def calculate_area(w, h):
     return w * h
 
+# def process_circle(circle):
+#     coordinates = [item[0] for item in circle]
+#     num_elements = len(coordinates)
+#     num_rows = num_elements // 4
+#     if num_elements % 4 != 0:
+#         num_rows += 1
+
+#     matrix = np.zeros((num_rows * 4, 2))
+#     for i, coord in enumerate(coordinates):
+#         matrix[i] = coord
+#     matrix = matrix[:num_elements].reshape(num_rows, 4, 2)
+#     return matrix
 def process_circle(circle):
     coordinates = [item[0] for item in circle]
     num_elements = len(coordinates)
-    num_rows = num_elements // 4
+    
+    # Đảm bảo số phần tử là bội số của 4
     if num_elements % 4 != 0:
-        num_rows += 1
-    matrix = np.zeros((num_rows * 4, 2))
+        # Tính số hàng cần thiết
+        num_rows = num_elements // 4 + 1
+        # Thêm các phần tử giả để đủ số lượng
+        padding_needed = num_rows * 4 - num_elements
+        for _ in range(padding_needed):
+            coordinates.append((0, 0))  # Thêm tọa độ giả
+        num_elements = len(coordinates)
+    else:
+        num_rows = num_elements // 4
+    
+    # Tạo ma trận và điền dữ liệu
+    matrix = np.zeros((num_elements, 2))
     for i, coord in enumerate(coordinates):
         matrix[i] = coord
-    matrix = matrix[:num_elements].reshape(num_rows, 4, 2)
+    
+    # Reshape thành ma trận 3D
+    matrix = matrix.reshape(num_rows, 4, 2)
     return matrix
 
 def sort_objects(objects, group_size):
@@ -649,44 +654,219 @@ def checking_part1(img, model):
     
     return(process_answers(combined_indices, result_final))
 
-# **************************************************************************************************
-# ********************************* BONUS **********************************************************
-# **************************************************************************************************
-
-convert_to_gray(urlSourceImage, urlOutputGrayImage)
-Tranformer(urlOutputGrayImage, detect_square_model, urlimage)
-Crop(urlimage, urlfolder)
-Crop1('D:/BKHN/20242/AI/ChamThi/Imagecrop/cropped_image_1.jpg', url_image_folderp1)
-Crop1('D:/BKHN/20242/AI/ChamThi/Imagecrop/cropped_image_2.jpg', url_image_folderp2)
-subdiv_part3(urlimagep3, detect_rect_model, url_image_folderp3)
-
 
 # **************************************************************************************************
-# ********************************* PART1 **********************************************************
+# ********************************* BATCH PROCESSING & EXCEL EXPORT ********************************
 # **************************************************************************************************
 
-result_part1 = []
-for imgp1 in image_file1:
-    result_part1.append(checking_part1(url_image_folderp1 + '/' + imgp1, detect_circle_model_update))
-# **************************************************************************************************
-# ********************************* PART2 **********************************************************
-# **************************************************************************************************
+def process_all_images_and_export():
+    """
+    Xử lý tất cả ảnh trong thư mục Data_raw và lưu kết quả vào Excel với mỗi câu ở một cột riêng
+    
+    Returns:
+        Đường dẫn đến file Excel kết quả
+    """
+    # Kiểm tra thư mục tồn tại
+    if not os.path.exists(DATA_RAW_DIR):
+        print(f"Thư mục {DATA_RAW_DIR} không tồn tại!")
+        return
+    
+    # Tạo thư mục cho ảnh đã xử lý
+    processed_images_dir = os.path.join(OUTPUT_DIR, "Processed_Images")
+    if not os.path.exists(processed_images_dir):
+        os.makedirs(processed_images_dir)
+    
+    # Lấy danh sách tất cả các file ảnh trong thư mục Data_raw
+    image_files = []
+    for root, _, files in os.walk(DATA_RAW_DIR):
+        for file in files:
+            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                image_files.append(os.path.join(root, file))
+    
+    # Tạo DataFrame để lưu kết quả
+    results_data = {
+        'Image_Name': [],
+        'Image_Path': []
+    }
+    
+    # Xác định số lượng câu tối đa cho mỗi phần
+    max_part1_questions = 40  # Giả sử tối đa 40 câu cho phần 1
+    
+    # Tạo các cột cho Part 1
+    for i in range(1, max_part1_questions + 1):
+        results_data[f'P1_Q{i}'] = []
+    
+    # Tạo các cột cho Part 2
+    # Part 2 có định dạng 1A, 1B, 1C, 1D, 2A, 2B, 2C, 2D, v.v.
+    max_part2_numbers = 8  # Giả sử có 8 số (1-8)
+    part2_letters = ['A', 'B', 'C', 'D']  # Các chữ cái cho mỗi số
+    for num in range(1, max_part2_numbers + 1):
+        for letter in part2_letters:
+            results_data[f'P2_{num}{letter}'] = []
+    
+    # Tạo các cột cho Part 3
+    max_part3_questions = 6  # Giả sử tối đa 10 câu cho phần 3
+    for i in range(1, max_part3_questions + 1):
+        results_data[f'P3_Q{i}'] = []
+    
+    # Xử lý từng ảnh
+    total_images = len(image_files)
+    for i, image_path in enumerate(image_files, 1):
+        image_name = os.path.basename(image_path)
+        print(f"[{i}/{total_images}] Đang xử lý ảnh: {image_name}")
+        
+        try:
+            # Tạo thư mục riêng cho ảnh này
+            image_output_dir = os.path.join(processed_images_dir, os.path.splitext(image_name)[0])
+            if not os.path.exists(image_output_dir):
+                os.makedirs(image_output_dir)
+            
+            # Đường dẫn cho các file tạm thời
+            temp_gray_path = os.path.join(image_output_dir, "gray.jpg")
+            temp_warped_path = os.path.join(image_output_dir, "transformed.jpg")
+            temp_folder = os.path.join(image_output_dir, "crops")
+            if not os.path.exists(temp_folder):
+                os.makedirs(temp_folder)
+            
+            # Xử lý ảnh
+            convert_to_gray(image_path, temp_gray_path)
+            Tranformer(temp_gray_path, detect_square_model, temp_warped_path)
+            Crop(temp_warped_path, temp_folder)
+            
+            # Xử lý Part1
+            part1_folder = os.path.join(image_output_dir, "Part1")
+            if not os.path.exists(part1_folder):
+                os.makedirs(part1_folder)
+            Crop1(os.path.join(temp_folder, 'cropped_image_1.jpg'), part1_folder)
+            
+            # Xử lý Part2
+            part2_folder = os.path.join(image_output_dir, "Part2")
+            if not os.path.exists(part2_folder):
+                os.makedirs(part2_folder)
+            Crop2(os.path.join(temp_folder, 'cropped_image_2.jpg'), part2_folder)
+            
+            # Xử lý Part3
+            part3_folder = os.path.join(image_output_dir, "Part3")
+            if not os.path.exists(part3_folder):
+                os.makedirs(part3_folder)
+            subdiv_part3(os.path.join(temp_folder, 'cropped_image_3.jpg'), detect_rect_model, part3_folder)
+            
+            # Lấy kết quả từ các phần
+            part1_results = []
+            part1_image_files = [f for f in os.listdir(part1_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+            for img_file in part1_image_files:
+                part1_results.append(checking_part1(os.path.join(part1_folder, img_file), detect_circle_model_update))
+            
+            part2_results = []
+            part2_image_files = [f for f in os.listdir(part2_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+            for img_file in part2_image_files:
+                part2_results.append(checking_part2(os.path.join(part2_folder, img_file), detect_circle_model_update1))
+            
+            part3_results = []
+            part3_image_files = [f for f in os.listdir(part3_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+            for img_file in part3_image_files:
+                part3_results.append(checking_part3(os.path.join(part3_folder, img_file), detect_circle_model))
+            
+            # Chuẩn bị dữ liệu cho Excel
+            results_data['Image_Name'].append(image_name)
+            results_data['Image_Path'].append(image_path)
+            
+            # Xử lý kết quả Part 1
+            part1_updated = update_indices(part1_results)
+            part1_dict = {}
+            
+            # Chuyển đổi kết quả thành dictionary với key là số câu
+            for item in part1_updated:
+                if isinstance(item, str):
+                    parts = item.split(' - ')
+                    if len(parts) == 2:
+                        question_num = int(parts[0])
+                        answer = parts[1]
+                        part1_dict[question_num] = answer
+            
+            # Điền kết quả vào các cột tương ứng
+            for q_num in range(1, max_part1_questions + 1):
+                if q_num in part1_dict:
+                    results_data[f'P1_Q{q_num}'].append(part1_dict[q_num])
+                else:
+                    results_data[f'P1_Q{q_num}'].append('')
+            
+            # Xử lý kết quả Part 2
+            part2_sorted = sorting_ans_p2(key_map_21, key_map_22, part2_results)
+            part2_dict = {}
+            
+            # Chuyển đổi kết quả thành dictionary với key là mã câu (ví dụ: "1A", "2B")
+            for item in part2_sorted:
+                if isinstance(item, str):
+                    # Format là "1A-Đ", "1B-S", v.v.
+                    # Lấy 2 ký tự đầu làm mã câu (ví dụ: "1A")
+                    question_code = item[:2]
+                    answer = item[3:]  # Phần sau dấu "-"
+                    part2_dict[question_code] = answer
+            
+            # Điền kết quả vào các cột tương ứng
+            for num in range(1, max_part2_numbers + 1):
+                for letter in part2_letters:
+                    question_code = f"{num}{letter}"
+                    if question_code in part2_dict:
+                        results_data[f'P2_{question_code}'].append(part2_dict[question_code])
+                    else:
+                        results_data[f'P2_{question_code}'].append('')
+            
+            # Xử lý kết quả Part 3
+            part3_dict = {}
+            
+            # Chuyển đổi kết quả thành dictionary với key là số câu
+            for i, answer in enumerate(part3_results, 1):
+                part3_dict[i] = answer
+            
+            # Điền kết quả vào các cột tương ứng
+            for q_num in range(1, max_part3_questions + 1):
+                if q_num in part3_dict:
+                    results_data[f'P3_Q{q_num}'].append(part3_dict[q_num])
+                else:
+                    results_data[f'P3_Q{q_num}'].append('')
+            
+            print(f"  ✓ Đã xử lý thành công ảnh {image_name}")
+            
+        except Exception as e:
+            print(f"  ✗ Lỗi khi xử lý ảnh {image_name}: {str(e)}")
+            
+            # Thêm dòng cho ảnh bị lỗi với các giá trị trống
+            results_data['Image_Name'].append(image_name)
+            results_data['Image_Path'].append(image_path)
+            
+            # Điền giá trị lỗi cho tất cả các câu
+            for q_num in range(1, max_part1_questions + 1):
+                results_data[f'P1_Q{q_num}'].append(f"ERROR: {str(e)}")
+            
+            for num in range(1, max_part2_numbers + 1):
+                for letter in part2_letters:
+                    results_data[f'P2_{num}{letter}'].append(f"ERROR: {str(e)}")
+            
+            for q_num in range(1, max_part3_questions + 1):
+                results_data[f'P3_Q{q_num}'].append(f"ERROR: {str(e)}")
+    
+    # Tạo DataFrame từ dữ liệu đã thu thập
+    results_df = pd.DataFrame(results_data)
+    
+    # Sắp xếp DataFrame theo tên ảnh
+    results_df = results_df.sort_values(by='Image_Name')
+    
+    # Tạo tên file Excel với timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    excel_path = os.path.join(OUTPUT_DIR, f"Results_{timestamp}.xlsx")
+    
+    # Lưu DataFrame vào file Excel
+    results_df.to_excel(excel_path, index=False)
+    
+    print(f"\nĐã hoàn thành xử lý {total_images} ảnh!")
+    print(f"Kết quả đã được lưu vào: {excel_path}")
+    
+    return excel_path
 
-result_part2 = []
-for imgp2 in image_file1:
-    result_part2.append(checking_part2(url_image_folderp2 + '/' + imgp2, detect_circle_model_update1))
-
-# **************************************************************************************************
-# ********************************* PART3 **********************************************************
-# **************************************************************************************************
-
-result_part3 = []
-for img_file in image_file3:
-    result_part3.append(checking_part3(url_image_folderp3 + '/' + img_file, detect_circle_model))
-
-
-print(update_indices(result_part1))
-print(sorting_ans_p2(key_map_21, key_map_22, result_part2))
-print(result_part3)
-
-
+# Chạy chương trình khi file được thực thi trực tiếp
+if __name__ == "__main__":
+    print("\nBắt đầu xử lý tất cả ảnh trong thư mục Data_raw...")
+    # Xử lý ảnh và xuất kết quả
+    process_all_images_and_export()

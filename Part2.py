@@ -1,9 +1,12 @@
 from ultralytics import YOLO
 import numpy as np
+import cv2
+import os
 
 # Load a pretrained YOLO model
 model = YOLO('D:/BKHN/20242/AI/ChamThi/runs/detect/train5/weights/best.pt')
-result = model('D:/BKHN/20242/AI/ChamThi/Part2/cropped_image_0.jpg')
+image_path = 'D:/BKHN/20242/AI/ChamThi/Part2/cropped_image_3.jpg'
+result = model(image_path)
 
 # Khởi tạo danh sách
 circle = []
@@ -12,6 +15,23 @@ key_map_21 = ["Đ", "S", "Đ", "S"]
 key_map_22 = ["A", "B", "C", "D"]
 result_final = []
 combined = []
+
+# Tạo thư mục output nếu chưa tồn tại
+output_dir = 'D:/BKHN/20242/AI/ChamThi/Part2'
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+
+# Đọc hình ảnh để vẽ lên
+image = cv2.imread(image_path)
+if image is None:
+    print(f"Không thể đọc hình ảnh từ {image_path}")
+else:
+    # Tạo bản sao của hình ảnh để vẽ lên
+    visualization = image.copy()
+    
+    # Màu sắc cho các lớp khác nhau
+    circle_color = (0, 255, 0)  # Xanh lá cho circle (class_id=1)
+    choice_color = (0, 0, 255)  # Đỏ cho choice (class_id=0)
 
 def calculate_area(w, h):
     return w * h
@@ -50,26 +70,50 @@ for r in result:
     confidences = r.boxes.conf.cpu().numpy()
     class_ids = r.boxes.cls.cpu().numpy()
     centers = np.column_stack((boxes[:, 0], boxes[:, 1]))
-    for center, confidence, class_id, box in zip(centers, confidences, class_ids, boxes):
+    
+    # Chuyển đổi từ xywh sang xyxy để vẽ bounding box
+    boxes_xyxy = []
+    for box in boxes:
+        x, y, w, h = box
+        x1 = int(x - w/2)
+        y1 = int(y - h/2)
+        x2 = int(x + w/2)
+        y2 = int(y + h/2)
+        boxes_xyxy.append([x1, y1, x2, y2])
+    
+    # Lưu thông tin và vẽ bounding box
+    for (x1, y1, x2, y2), center, confidence, class_id, box in zip(boxes_xyxy, centers, confidences, class_ids, boxes):
+        # Chọn màu dựa trên class_id
+        color = circle_color if class_id == 1 else choice_color
+        
         if class_id == 1:
             combined.append((tuple(center), confidence, class_id, box))
-        elif class_id == 0 and confidence >= 0.98:
+            # Vẽ bounding box cho circle không có label
+            if 'visualization' in locals():
+                cv2.rectangle(visualization, (x1, y1), (x2, y2), color, 2)
+        elif class_id == 0 and confidence >= 0.9:
             choice.append((tuple(center), confidence, class_id, box))
+            # Vẽ bounding box và label cho choice
+            if 'visualization' in locals():
+                cv2.rectangle(visualization, (x1, y1), (x2, y2), color, 2)
+                
+                # Hiển thị thông tin chỉ cho choice
+                label = f"Choice: {confidence:.2f}"
+                
+                # Đặt văn bản ở vị trí phù hợp
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 0.5
+                font_thickness = 1
+                (text_width, text_height), _ = cv2.getTextSize(label, font, font_scale, font_thickness)
+                
+                # Vẽ nền cho văn bản
+                cv2.rectangle(visualization, (x1, y1 - text_height - 5), (x1 + text_width, y1), color, -1)
+                
+                # Vẽ văn bản
+                cv2.putText(visualization, label, (x1, y1 - 5), font, font_scale, (255, 255, 255), font_thickness)
+
 # Sắp xếp danh sách theo độ tin cậy giảm dần
 combined_sorted = sorted(combined, key=lambda x: x[1], reverse=True)
-
-# Lấy bound box có độ tin cậy cao nhất và tính diện tích
-# highest_conf_box_1 = combined_sorted[1]
-# highest_conf_box_0 = combined_sorted[0]
-# highest_conf_box_2 = combined_sorted[2]
-# highest_conf_box_area_0 = calculate_area(highest_conf_box_0[3][2], highest_conf_box_0[3][3])
-# highest_conf_box_area_1 = calculate_area(highest_conf_box_1[3][2], highest_conf_box_1[3][3])
-# highest_conf_box_area_2 = calculate_area(highest_conf_box_2[3][2], highest_conf_box_2[3][3])
-
-# if(highest_conf_box_area_0 > highest_conf_box_area_1):
-#     highest_conf_box_area = highest_conf_box_area_1
-# else:
-#     highest_conf_box_area = highest_conf_box_area_0
 
 smallest_area = float('inf')
 
@@ -82,6 +126,7 @@ for boxmin in combined_sorted:
     if box_area < smallest_area:
         smallest_area = box_area
 highest_conf_box_area = smallest_area
+
 # Lọc các bound box dựa trên sự chênh lệch diện tích
 filtered_combined = []
 removed_count = 0
@@ -89,23 +134,32 @@ for box in combined_sorted:
     area = calculate_area(box[3][2], box[3][3])
     if abs(area - highest_conf_box_area) > 10000:
         removed_count += 1
+        
+        # Đánh dấu các circle bị loại bỏ nếu hình ảnh đã được đọc thành công
+        if 'visualization' in locals():
+            x, y = int(box[0][0]), int(box[0][1])
+            cv2.drawMarker(visualization, (x, y), (0, 0, 0), cv2.MARKER_CROSS, 20, 3)
     else:
         filtered_combined.append(box)
 
 # Lưu trữ vào danh sách circle
 circle.extend(filtered_combined)
-# print(removed_count)
-# print(len(circle))
+
+# Thêm thông tin về số lượng circle bị loại bỏ nếu hình ảnh đã được đọc thành công
+if 'visualization' in locals():
+    info_text = f"Removed Circles: {removed_count}/{len(combined_sorted)}"
+    cv2.putText(visualization, info_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+    
+    # Thêm thông tin về diện tích nhỏ nhất
+    info_text = f"Smallest Circle Area: {smallest_area:.0f}"
+    cv2.putText(visualization, info_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
 
 sorted_choice = sort_objects(choice, 4)
 sorted_circle = sort_objects(circle, 4)
-# print(sorted_choice)
-# print(len(sorted_circle))
 row_circle = calculate_average_y(sorted_circle, 4)
 
 matrix = process_circle(sorted_circle)
 
-# print(matrix)
 def find_closest_indices(sorted_choice, row_circle):
     closest_indices = []
     for choice_coord in sorted_choice:
@@ -132,33 +186,76 @@ def find_min_x_indices(sorted_choice, closest_indices, matrix):
         min_x_indices.append(min_x_index)
     return min_x_indices
 
-# print(find_closest_indices(sorted_choice, row_circle))
-# print(find_min_x_indices(sorted_choice, find_closest_indices(sorted_choice, row_circle), matrix))
-
-x = find_min_x_indices(sorted_choice, find_closest_indices(sorted_choice, row_circle), matrix)
-y = find_closest_indices(sorted_choice, row_circle)
-combined_indices = [(x, y) for x, y in zip(x, y)]
-combined_indices.sort(key=lambda x: x[1])
-
-#print(combined_indices)
-
 def generate_output(key_map_21, key_map_22, combined_indices, offset):
     result = []
-    for i, (index_21, index_22) in enumerate(combined_indices):
+    
+    # Kiểm tra xem combined_indices có phải là danh sách các cặp không
+    if not isinstance(combined_indices, list):
+        print(f"Lỗi: combined_indices không phải là danh sách: {combined_indices}")
+        return result
+    
+    for i, indices in enumerate(combined_indices):
+        # Kiểm tra xem indices có phải là tuple hoặc list không
+        if not isinstance(indices, (tuple, list)) or len(indices) != 2:
+            print(f"Lỗi: indices không phải là cặp giá trị: {indices}")
+            continue
+        
+        index_21, index_22 = indices
+        
+        # Kiểm tra xem index_21 và index_22 có nằm trong phạm vi hợp lệ không
+        if not (0 <= index_21 < len(key_map_21) and 0 <= index_22 < len(key_map_22)):
+            print(f"Lỗi: index_21={index_21} hoặc index_22={index_22} nằm ngoài phạm vi")
+            continue
+        
         prefix = str(1 + offset) if index_21 in [0, 1] else str(2 + offset)
         output_string = f"{prefix}{key_map_22[index_22]}-{key_map_21[index_21]}"
         result.append(output_string)
+    
     return result
+
+closest_indices = find_closest_indices(sorted_choice, row_circle)
+min_x_indices = find_min_x_indices(sorted_choice, closest_indices, matrix)
+
+# Kiểm tra kết quả
+print("closest_indices:", closest_indices)
+print("min_x_indices:", min_x_indices)
+
+# Tạo combined_indices
+combined_indices = []
+for i in range(len(min_x_indices)):
+    combined_indices.append((min_x_indices[i], closest_indices[i]))
+
+# Kiểm tra combined_indices
+print("combined_indices trước khi sắp xếp:", combined_indices)
+
+# Sắp xếp combined_indices
+combined_indices.sort(key=lambda x: x[1])
+print("combined_indices sau khi sắp xếp:", combined_indices)
+
+# Vòng lặp để tạo all_outputs
 all_outputs = []
-for loop_index, combined_indices in enumerate(combined_indices_list):
+for loop_index, indices in enumerate(combined_indices):
     offset = loop_index * 2
-    output = generate_output(key_map_21, key_map_22, combined_indices, offset)
+    output = generate_output(key_map_21, key_map_22, [indices], offset)
     all_outputs.extend(output)
 
 # Sắp xếp lại kết quả theo tiền tố
 all_outputs.sort(key=lambda x: int(x[0]))
 
 print(all_outputs)
+
+# Hiển thị và lưu hình ảnh nếu đã được đọc thành công
+if 'visualization' in locals():
+    # Hiển thị hình ảnh
+    cv2.imshow("Part2 Visualization", visualization)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    
+    # Lưu hình ảnh
+    output_path = os.path.join(output_dir, f"part2_visualization_{os.path.basename(image_path)}")
+    cv2.imwrite(output_path, visualization)
+    print(f"Đã lưu hình ảnh kết quả tại: {output_path}")
+
 # for xloc, yloc in combined_indices:
 #     value = key_map_12[xloc]
 #     result_final.append(value)
@@ -185,3 +282,5 @@ print(all_outputs)
 #     return final_result
 
 # print(process_answers(combined_indices, result_final))
+
+

@@ -6,7 +6,7 @@ import os
 import shutil
 
 # Load a pretrained YOLO model
-model = YOLO('D:/BKHN/20242/AI/ChamThi/runs/detect/train/weights/best.pt')
+model = YOLO('D:/BKHN/20242/AI/ChamThi/runs/detect/trainv2/weights/best.pt')
 
 # Thư mục chứa ảnh gốc
 input_dir = 'Data_raw/Todien'
@@ -79,7 +79,7 @@ def transform_image(image_path, model):
             
             for corner, coord in corner_coords.items():
                 distance = np.sqrt((box_center[0] - coord[0]) ** 2 + (box_center[1] - coord[1]) ** 2)
-                if distance < corner_distances[corner] and confidence >= 0.8:
+                if distance < corner_distances[corner] and confidence >= 0.75:
                     corners[corner] = box
                     corner_distances[corner] = distance
     

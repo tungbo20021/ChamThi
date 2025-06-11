@@ -3,7 +3,7 @@ import numpy as np
 
 # Load a pretrained YOLO model
 model = YOLO('D:/BKHN/20242/AI/ChamThi/runs/detect/train5/weights/best.pt')
-result = model('D:/BKHN/20242/AI/ChamThi/Part1/cropped_image_0.jpg')
+result = model('D:/BKHN/20242/AI/ChamThi/Data_raw/Todien/5.jpg')
 
 # Khởi tạo danh sách
 circle = []
